@@ -6,11 +6,18 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'にほんご Duel — 이미지로 배우는 히라가나·카타카나',
+      title: 'localhost',
+      titleTemplate: 'localhost',
+      htmlAttrs: { lang: 'ko' },
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: '한국인을 위한 이미지 연상 일본어 학습. 히라가나와 카타카나를 그림으로 쉽게 외우세요.' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5' },
+        { name: 'description', content: '' },
+        { name: 'theme-color', content: '#F8F4EC' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-title', content: 'localhost' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'format-detection', content: 'telephone=no' },
       ],
       link: [
         {

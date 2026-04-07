@@ -68,33 +68,117 @@ const katakanaData: KanaChar[] = [
   { kana: 'ン', romaji: 'n', korean: '응', mnemonic: '응~ 끄덕이는 사람. (ソ와 구별: ン은 왼쪽 아래에서 오른쪽 위로!)', mnemonicImage: 'nodding-person', row: 'ワ행', order: 45 },
 ]
 
-export function getKatakanaRows(): KanaRow[] {
+// === 탁음 / 반탁음 / 요음 ===
+const katakanaDakuten: KanaChar[] = [
+  { kana: 'ガ', romaji: 'ga', korean: '가', mnemonic: 'カ + ゛ = 가', mnemonicImage: 'scissors', row: 'ガ행', order: 46 },
+  { kana: 'ギ', romaji: 'gi', korean: '기', mnemonic: 'キ + ゛ = 기', mnemonicImage: 'keyboard', row: 'ガ행', order: 47 },
+  { kana: 'グ', romaji: 'gu', korean: '구', mnemonic: 'ク + ゛ = 구', mnemonicImage: 'cookie-bite', row: 'ガ행', order: 48 },
+  { kana: 'ゲ', romaji: 'ge', korean: '게', mnemonic: 'ケ + ゛ = 게', mnemonicImage: 'skating', row: 'ガ행', order: 49 },
+  { kana: 'ゴ', romaji: 'go', korean: '고', mnemonic: 'コ + ゛ = 고', mnemonicImage: 'corner', row: 'ガ행', order: 50 },
+  { kana: 'ザ', romaji: 'za', korean: '자', mnemonic: 'サ + ゛ = 자', mnemonicImage: 'ladder', row: 'ザ행', order: 51 },
+  { kana: 'ジ', romaji: 'ji', korean: '지', mnemonic: 'シ + ゛ = 지', mnemonicImage: 'wink-face', row: 'ザ행', order: 52 },
+  { kana: 'ズ', romaji: 'zu', korean: '즈', mnemonic: 'ス + ゛ = 즈', mnemonicImage: 'ski-jump', row: 'ザ행', order: 53 },
+  { kana: 'ゼ', romaji: 'ze', korean: '제', mnemonic: 'セ + ゛ = 제', mnemonicImage: 'sail', row: 'ザ행', order: 54 },
+  { kana: 'ゾ', romaji: 'zo', korean: '조', mnemonic: 'ソ + ゛ = 조', mnemonicImage: 'raindrops', row: 'ザ행', order: 55 },
+  { kana: 'ダ', romaji: 'da', korean: '다', mnemonic: 'タ + ゛ = 다', mnemonicImage: 'ship', row: 'ダ행', order: 56 },
+  { kana: 'ヂ', romaji: 'ji', korean: '지(드물게)', mnemonic: 'チ + ゛. ジ와 발음 같음', mnemonicImage: 'cheerleader', row: 'ダ행', order: 57 },
+  { kana: 'ヅ', romaji: 'zu', korean: '즈(드물게)', mnemonic: 'ツ + ゛. ズ와 발음 같음', mnemonicImage: 'three-drops', row: 'ダ행', order: 58 },
+  { kana: 'デ', romaji: 'de', korean: '데', mnemonic: 'テ + ゛ = 데', mnemonicImage: 'table', row: 'ダ행', order: 59 },
+  { kana: 'ド', romaji: 'do', korean: '도', mnemonic: 'ト + ゛ = 도', mnemonicImage: 'totem', row: 'ダ행', order: 60 },
+  { kana: 'バ', romaji: 'ba', korean: '바', mnemonic: 'ハ + ゛ = 바', mnemonicImage: 'open-mouth', row: 'バ행', order: 61 },
+  { kana: 'ビ', romaji: 'bi', korean: '비', mnemonic: 'ヒ + ゛ = 비', mnemonicImage: 'heater', row: 'バ행', order: 62 },
+  { kana: 'ブ', romaji: 'bu', korean: '부', mnemonic: 'フ + ゛ = 부', mnemonicImage: 'hood', row: 'バ행', order: 63 },
+  { kana: 'ベ', romaji: 'be', korean: '베', mnemonic: 'ヘ + ゛ = 베', mnemonicImage: 'mountain-same', row: 'バ행', order: 64 },
+  { kana: 'ボ', romaji: 'bo', korean: '보', mnemonic: 'ホ + ゛ = 보', mnemonicImage: 'cross', row: 'バ행', order: 65 },
+]
+
+const katakanaHandakuten: KanaChar[] = [
+  { kana: 'パ', romaji: 'pa', korean: '파', mnemonic: 'ハ + ゜ = 파', mnemonicImage: 'open-mouth', row: 'パ행', order: 66 },
+  { kana: 'ピ', romaji: 'pi', korean: '피', mnemonic: 'ヒ + ゜ = 피', mnemonicImage: 'heater', row: 'パ행', order: 67 },
+  { kana: 'プ', romaji: 'pu', korean: '푸', mnemonic: 'フ + ゜ = 푸', mnemonicImage: 'hood', row: 'パ행', order: 68 },
+  { kana: 'ペ', romaji: 'pe', korean: '페', mnemonic: 'ヘ + ゜ = 페', mnemonicImage: 'mountain-same', row: 'パ행', order: 69 },
+  { kana: 'ポ', romaji: 'po', korean: '포', mnemonic: 'ホ + ゜ = 포', mnemonicImage: 'cross', row: 'パ행', order: 70 },
+]
+
+const katakanaYoon: KanaChar[] = [
+  { kana: 'キャ', romaji: 'kya', korean: '캬', mnemonic: 'キ + ャ', mnemonicImage: 'keyboard', row: 'キャ행', order: 71 },
+  { kana: 'キュ', romaji: 'kyu', korean: '큐', mnemonic: 'キ + ュ', mnemonicImage: 'keyboard', row: 'キャ행', order: 72 },
+  { kana: 'キョ', romaji: 'kyo', korean: '쿄', mnemonic: 'キ + ョ', mnemonicImage: 'keyboard', row: 'キャ행', order: 73 },
+  { kana: 'シャ', romaji: 'sha', korean: '샤', mnemonic: 'シ + ャ. シャツ(셔츠)', mnemonicImage: 'wink-face', row: 'シャ행', order: 74 },
+  { kana: 'シュ', romaji: 'shu', korean: '슈', mnemonic: 'シ + ュ. シュー(슈)', mnemonicImage: 'wink-face', row: 'シャ행', order: 75 },
+  { kana: 'ショ', romaji: 'sho', korean: '쇼', mnemonic: 'シ + ョ. ショー(쇼)', mnemonicImage: 'wink-face', row: 'シャ행', order: 76 },
+  { kana: 'チャ', romaji: 'cha', korean: '챠', mnemonic: 'チ + ャ. チャイ(차이)', mnemonicImage: 'cheerleader', row: 'チャ행', order: 77 },
+  { kana: 'チュ', romaji: 'chu', korean: '츄', mnemonic: 'チ + ュ', mnemonicImage: 'cheerleader', row: 'チャ행', order: 78 },
+  { kana: 'チョ', romaji: 'cho', korean: '쵸', mnemonic: 'チ + ョ. チョコ(쵸코)', mnemonicImage: 'cheerleader', row: 'チャ행', order: 79 },
+  { kana: 'ニャ', romaji: 'nya', korean: '냐', mnemonic: 'ニ + ャ', mnemonicImage: 'two-lines', row: 'ニャ행', order: 80 },
+  { kana: 'ニュ', romaji: 'nyu', korean: '뉴', mnemonic: 'ニ + ュ. ニュース(뉴스)', mnemonicImage: 'two-lines', row: 'ニャ행', order: 81 },
+  { kana: 'ニョ', romaji: 'nyo', korean: '뇨', mnemonic: 'ニ + ョ', mnemonicImage: 'two-lines', row: 'ニャ행', order: 82 },
+  { kana: 'ヒャ', romaji: 'hya', korean: '햐', mnemonic: 'ヒ + ャ', mnemonicImage: 'heater', row: 'ヒャ행', order: 83 },
+  { kana: 'ヒュ', romaji: 'hyu', korean: '휴', mnemonic: 'ヒ + ュ. ヒューズ(퓨즈)', mnemonicImage: 'heater', row: 'ヒャ행', order: 84 },
+  { kana: 'ヒョ', romaji: 'hyo', korean: '효', mnemonic: 'ヒ + ョ', mnemonicImage: 'heater', row: 'ヒャ행', order: 85 },
+  { kana: 'ミャ', romaji: 'mya', korean: '먀', mnemonic: 'ミ + ャ', mnemonicImage: 'three-lines', row: 'ミャ행', order: 86 },
+  { kana: 'ミュ', romaji: 'myu', korean: '뮤', mnemonic: 'ミ + ュ. ミュージック(뮤직)', mnemonicImage: 'three-lines', row: 'ミャ행', order: 87 },
+  { kana: 'ミョ', romaji: 'myo', korean: '묘', mnemonic: 'ミ + ョ', mnemonicImage: 'three-lines', row: 'ミャ행', order: 88 },
+  { kana: 'リャ', romaji: 'rya', korean: '랴', mnemonic: 'リ + ャ', mnemonicImage: 'ribbon-straight', row: 'リャ행', order: 89 },
+  { kana: 'リュ', romaji: 'ryu', korean: '류', mnemonic: 'リ + ュ. リュック(륙색)', mnemonicImage: 'ribbon-straight', row: 'リャ행', order: 90 },
+  { kana: 'リョ', romaji: 'ryo', korean: '료', mnemonic: 'リ + ョ', mnemonicImage: 'ribbon-straight', row: 'リャ행', order: 91 },
+  { kana: 'ギャ', romaji: 'gya', korean: '갸', mnemonic: 'ギ + ャ', mnemonicImage: 'keyboard', row: 'ギャ행', order: 92 },
+  { kana: 'ギュ', romaji: 'gyu', korean: '규', mnemonic: 'ギ + ュ', mnemonicImage: 'keyboard', row: 'ギャ행', order: 93 },
+  { kana: 'ギョ', romaji: 'gyo', korean: '교', mnemonic: 'ギ + ョ', mnemonicImage: 'keyboard', row: 'ギャ행', order: 94 },
+  { kana: 'ジャ', romaji: 'ja', korean: '쟈', mnemonic: 'ジ + ャ. ジャズ(재즈)', mnemonicImage: 'wink-face', row: 'ジャ행', order: 95 },
+  { kana: 'ジュ', romaji: 'ju', korean: '쥬', mnemonic: 'ジ + ュ. ジュース(주스)', mnemonicImage: 'wink-face', row: 'ジャ행', order: 96 },
+  { kana: 'ジョ', romaji: 'jo', korean: '죠', mnemonic: 'ジ + ョ', mnemonicImage: 'wink-face', row: 'ジャ행', order: 97 },
+  { kana: 'ビャ', romaji: 'bya', korean: '뱌', mnemonic: 'ビ + ャ', mnemonicImage: 'heater', row: 'ビャ행', order: 98 },
+  { kana: 'ビュ', romaji: 'byu', korean: '뷰', mnemonic: 'ビ + ュ', mnemonicImage: 'heater', row: 'ビャ행', order: 99 },
+  { kana: 'ビョ', romaji: 'byo', korean: '뵤', mnemonic: 'ビ + ョ', mnemonicImage: 'heater', row: 'ビャ행', order: 100 },
+  { kana: 'ピャ', romaji: 'pya', korean: '퍄', mnemonic: 'ピ + ャ', mnemonicImage: 'heater', row: 'ピャ행', order: 101 },
+  { kana: 'ピュ', romaji: 'pyu', korean: '퓨', mnemonic: 'ピ + ュ', mnemonicImage: 'heater', row: 'ピャ행', order: 102 },
+  { kana: 'ピョ', romaji: 'pyo', korean: '표', mnemonic: 'ピ + ョ', mnemonicImage: 'heater', row: 'ピャ행', order: 103 },
+]
+
+const allKatakanaCombined = [...katakanaData, ...katakanaDakuten, ...katakanaHandakuten, ...katakanaYoon]
+
+const katakanaRowNames: Record<string, string> = {
+  'ア행': 'ア행 (모음)', 'カ행': 'カ행 (K)', 'サ행': 'サ행 (S)', 'タ행': 'タ행 (T)',
+  'ナ행': 'ナ행 (N)', 'ハ행': 'ハ행 (H)', 'マ행': 'マ행 (M)', 'ヤ행': 'ヤ행 (Y)',
+  'ラ행': 'ラ행 (R)', 'ワ행': 'ワ행 (W/N)',
+  'ガ행': 'ガ행 (G·탁음)', 'ザ행': 'ザ행 (Z·탁음)', 'ダ행': 'ダ행 (D·탁음)', 'バ행': 'バ행 (B·탁음)',
+  'パ행': 'パ행 (P·반탁음)',
+  'キャ행': 'キャ행 (Ky)', 'シャ행': 'シャ행 (Sh)', 'チャ행': 'チャ행 (Ch)',
+  'ニャ행': 'ニャ행 (Ny)', 'ヒャ행': 'ヒャ행 (Hy)', 'ミャ행': 'ミャ행 (My)',
+  'リャ행': 'リャ행 (Ry)', 'ギャ행': 'ギャ행 (Gy)', 'ジャ행': 'ジャ행 (J)',
+  'ビャ행': 'ビャ행 (By)', 'ピャ행': 'ピャ행 (Py)',
+}
+
+function buildKataRows(pool: KanaChar[]): KanaRow[] {
   const rowMap = new Map<string, KanaChar[]>()
-  for (const char of katakanaData) {
+  for (const char of pool) {
     if (!rowMap.has(char.row)) rowMap.set(char.row, [])
     rowMap.get(char.row)!.push(char)
   }
-
-  const rowNames: Record<string, string> = {
-    'ア행': 'ア행 (모음)',
-    'カ행': 'カ행 (K)',
-    'サ행': 'サ행 (S)',
-    'タ행': 'タ행 (T)',
-    'ナ행': 'ナ행 (N)',
-    'ハ행': 'ハ행 (H)',
-    'マ행': 'マ행 (M)',
-    'ヤ행': 'ヤ행 (Y)',
-    'ラ행': 'ラ행 (R)',
-    'ワ행': 'ワ행 (W/N)',
-  }
-
   return Array.from(rowMap.entries()).map(([key, chars]) => ({
-    name: rowNames[key] || key,
+    name: katakanaRowNames[key] || key,
     nameJp: key,
     chars: chars.sort((a, b) => a.order - b.order),
   }))
 }
 
+export function getKatakanaRows(): KanaRow[] {
+  return buildKataRows(katakanaData)
+}
+export function getKatakanaDakutenRows(): KanaRow[] {
+  return buildKataRows([...katakanaDakuten, ...katakanaHandakuten])
+}
+export function getKatakanaYoonRows(): KanaRow[] {
+  return buildKataRows(katakanaYoon)
+}
+export function getAllKatakanaRows(): KanaRow[] {
+  return buildKataRows(allKatakanaCombined)
+}
+
 export function getAllKatakana(): KanaChar[] {
   return [...katakanaData].sort((a, b) => a.order - b.order)
+}
+export function getAllKatakanaFull(): KanaChar[] {
+  return [...allKatakanaCombined].sort((a, b) => a.order - b.order)
 }

@@ -82,33 +82,154 @@ const hiraganaData: KanaChar[] = [
   { kana: 'ん', romaji: 'n', korean: '응', mnemonic: '영어 "n"을 흘려 쓴 모양. 응~ 하고 끄덕이기.', mnemonicImage: 'nodding', row: 'わ행', order: 45 },
 ]
 
-export function getHiraganaRows(): KanaRow[] {
+// ===== 탁음 (Dakuten) — か→が, さ→ざ, た→だ, は→ば =====
+const hiraganaDakuten: KanaChar[] = [
+  { kana: 'が', romaji: 'ga', korean: '가', mnemonic: 'か(카) + ゛(탁점) = 가. 칼에 점이 추가되면 "가"!', mnemonicImage: 'katana', row: 'が행', order: 46 },
+  { kana: 'ぎ', romaji: 'gi', korean: '기', mnemonic: 'き + ゛ = 기. 열쇠에 탁점!', mnemonicImage: 'key', row: 'が행', order: 47 },
+  { kana: 'ぐ', romaji: 'gu', korean: '구', mnemonic: 'く + ゛ = 구. 부리에 탁점!', mnemonicImage: 'bird-beak', row: 'が행', order: 48 },
+  { kana: 'げ', romaji: 'ge', korean: '게', mnemonic: 'け + ゛ = 게. 케이크에 탁점!', mnemonicImage: 'cake-cut', row: 'が행', order: 49 },
+  { kana: 'ご', romaji: 'go', korean: '고', mnemonic: 'こ + ゛ = 고. 코에 탁점!', mnemonicImage: 'nose', row: 'が행', order: 50 },
+
+  { kana: 'ざ', romaji: 'za', korean: '자', mnemonic: 'さ(사) + ゛ = 자. 사무라이에 탁점!', mnemonicImage: 'samurai', row: 'ざ행', order: 51 },
+  { kana: 'じ', romaji: 'ji', korean: '지', mnemonic: 'し(시) + ゛ = 지. 낚시바늘에 탁점!', mnemonicImage: 'fish-hook', row: 'ざ행', order: 52 },
+  { kana: 'ず', romaji: 'zu', korean: '즈', mnemonic: 'す(스) + ゛ = 즈. 스키에 탁점!', mnemonicImage: 'skiing', row: 'ざ행', order: 53 },
+  { kana: 'ぜ', romaji: 'ze', korean: '제', mnemonic: 'せ(세) + ゛ = 제. 세일러에 탁점!', mnemonicImage: 'sailor', row: 'ざ행', order: 54 },
+  { kana: 'ぞ', romaji: 'zo', korean: '조', mnemonic: 'そ(소) + ゛ = 조. 소프트아이스에 탁점!', mnemonicImage: 'soft-ice', row: 'ざ행', order: 55 },
+
+  { kana: 'だ', romaji: 'da', korean: '다', mnemonic: 'た(타) + ゛ = 다. 돛대에 탁점!', mnemonicImage: 'mast', row: 'だ행', order: 56 },
+  { kana: 'ぢ', romaji: 'ji', korean: '지(드물게)', mnemonic: 'ち + ゛ = 지. じ와 발음 같음. 거의 안 쓰임.', mnemonicImage: 'five-chicken', row: 'だ행', order: 57 },
+  { kana: 'づ', romaji: 'zu', korean: '즈(드물게)', mnemonic: 'つ + ゛ = 즈. ず와 발음 같음. 거의 안 쓰임.', mnemonicImage: 'tsunami', row: 'だ행', order: 58 },
+  { kana: 'で', romaji: 'de', korean: '데', mnemonic: 'て(테) + ゛ = 데. 테이블에 탁점!', mnemonicImage: 'hand-table', row: 'だ행', order: 59 },
+  { kana: 'ど', romaji: 'do', korean: '도', mnemonic: 'と(토) + ゛ = 도. 토네이도에 탁점!', mnemonicImage: 'tornado', row: 'だ행', order: 60 },
+
+  { kana: 'ば', romaji: 'ba', korean: '바', mnemonic: 'は(하) + ゛ = 바. 웃는 사람에 탁점!', mnemonicImage: 'laughing', row: 'ば행', order: 61 },
+  { kana: 'び', romaji: 'bi', korean: '비', mnemonic: 'ひ(히) + ゛ = 비. 미소에 탁점!', mnemonicImage: 'smile', row: 'ば행', order: 62 },
+  { kana: 'ぶ', romaji: 'bu', korean: '부', mnemonic: 'ふ(후) + ゛ = 부. 후지산에 탁점!', mnemonicImage: 'fuji', row: 'ば행', order: 63 },
+  { kana: 'べ', romaji: 'be', korean: '베', mnemonic: 'へ(헤) + ゛ = 베. 산에 탁점!', mnemonicImage: 'hill', row: 'ば행', order: 64 },
+  { kana: 'ぼ', romaji: 'bo', korean: '보', mnemonic: 'ほ(호) + ゛ = 보. 호텔에 탁점!', mnemonicImage: 'hotel', row: 'ば행', order: 65 },
+]
+
+// ===== 반탁음 (Handakuten) — は→ぱ =====
+const hiraganaHandakuten: KanaChar[] = [
+  { kana: 'ぱ', romaji: 'pa', korean: '파', mnemonic: 'は(하) + ゜(반탁점) = 파. 동그라미가 붙으면 "파"!', mnemonicImage: 'laughing', row: 'ぱ행', order: 66 },
+  { kana: 'ぴ', romaji: 'pi', korean: '피', mnemonic: 'ひ(히) + ゜ = 피. 미소에 동그라미!', mnemonicImage: 'smile', row: 'ぱ행', order: 67 },
+  { kana: 'ぷ', romaji: 'pu', korean: '푸', mnemonic: 'ふ(후) + ゜ = 푸. 후지산에 동그라미!', mnemonicImage: 'fuji', row: 'ぱ행', order: 68 },
+  { kana: 'ぺ', romaji: 'pe', korean: '페', mnemonic: 'へ(헤) + ゜ = 페. 산에 동그라미!', mnemonicImage: 'hill', row: 'ぱ행', order: 69 },
+  { kana: 'ぽ', romaji: 'po', korean: '포', mnemonic: 'ほ(호) + ゜ = 포. 호텔에 동그라미!', mnemonicImage: 'hotel', row: 'ぱ행', order: 70 },
+]
+
+// ===== 요음 (Yōon) — き+ゃ → きゃ 등 =====
+// 가장 자주 쓰이는 것들만 요음으로 묶음
+const hiraganaYoon: KanaChar[] = [
+  { kana: 'きゃ', romaji: 'kya', korean: '캬', mnemonic: 'き + 작은 ゃ = 캬. 자음 + ya 합성', mnemonicImage: 'key', row: 'きゃ행', order: 71 },
+  { kana: 'きゅ', romaji: 'kyu', korean: '큐', mnemonic: 'き + 작은 ゅ = 큐.', mnemonicImage: 'key', row: 'きゃ행', order: 72 },
+  { kana: 'きょ', romaji: 'kyo', korean: '쿄', mnemonic: 'き + 작은 ょ = 쿄. 도시 이름 京都(쿄토)!', mnemonicImage: 'key', row: 'きゃ행', order: 73 },
+  { kana: 'しゃ', romaji: 'sha', korean: '샤', mnemonic: 'し + ゃ = 샤. 샤워의 "샤".', mnemonicImage: 'fish-hook', row: 'しゃ행', order: 74 },
+  { kana: 'しゅ', romaji: 'shu', korean: '슈', mnemonic: 'し + ゅ = 슈.', mnemonicImage: 'fish-hook', row: 'しゃ행', order: 75 },
+  { kana: 'しょ', romaji: 'sho', korean: '쇼', mnemonic: 'し + ょ = 쇼. 쇼핑의 "쇼"!', mnemonicImage: 'fish-hook', row: 'しゃ행', order: 76 },
+  { kana: 'ちゃ', romaji: 'cha', korean: '챠', mnemonic: 'ち + ゃ = 챠. お茶(오챠 = 차)!', mnemonicImage: 'five-chicken', row: 'ちゃ행', order: 77 },
+  { kana: 'ちゅ', romaji: 'chu', korean: '츄', mnemonic: 'ち + ゅ = 츄.', mnemonicImage: 'five-chicken', row: 'ちゃ행', order: 78 },
+  { kana: 'ちょ', romaji: 'cho', korean: '쵸', mnemonic: 'ち + ょ = 쵸. 쵸코의 "쵸"!', mnemonicImage: 'five-chicken', row: 'ちゃ행', order: 79 },
+  { kana: 'にゃ', romaji: 'nya', korean: '냐', mnemonic: 'に + ゃ = 냐. 고양이 울음 にゃ~!', mnemonicImage: 'kneeling', row: 'にゃ행', order: 80 },
+  { kana: 'にゅ', romaji: 'nyu', korean: '뉴', mnemonic: 'に + ゅ = 뉴.', mnemonicImage: 'kneeling', row: 'にゃ행', order: 81 },
+  { kana: 'にょ', romaji: 'nyo', korean: '뇨', mnemonic: 'に + ょ = 뇨.', mnemonicImage: 'kneeling', row: 'にゃ행', order: 82 },
+  { kana: 'ひゃ', romaji: 'hya', korean: '햐', mnemonic: 'ひ + ゃ = 햐.', mnemonicImage: 'smile', row: 'ひゃ행', order: 83 },
+  { kana: 'ひゅ', romaji: 'hyu', korean: '휴', mnemonic: 'ひ + ゅ = 휴.', mnemonicImage: 'smile', row: 'ひゃ행', order: 84 },
+  { kana: 'ひょ', romaji: 'hyo', korean: '효', mnemonic: 'ひ + ょ = 효.', mnemonicImage: 'smile', row: 'ひゃ행', order: 85 },
+  { kana: 'みゃ', romaji: 'mya', korean: '먀', mnemonic: 'み + ゃ = 먀.', mnemonicImage: 'twenty-one', row: 'みゃ행', order: 86 },
+  { kana: 'みゅ', romaji: 'myu', korean: '뮤', mnemonic: 'み + ゅ = 뮤.', mnemonicImage: 'twenty-one', row: 'みゃ행', order: 87 },
+  { kana: 'みょ', romaji: 'myo', korean: '묘', mnemonic: 'み + ょ = 묘.', mnemonicImage: 'twenty-one', row: 'みゃ행', order: 88 },
+  { kana: 'りゃ', romaji: 'rya', korean: '랴', mnemonic: 'り + ゃ = 랴.', mnemonicImage: 'ribbon', row: 'りゃ행', order: 89 },
+  { kana: 'りゅ', romaji: 'ryu', korean: '류', mnemonic: 'り + ゅ = 류.', mnemonicImage: 'ribbon', row: 'りゃ행', order: 90 },
+  { kana: 'りょ', romaji: 'ryo', korean: '료', mnemonic: 'り + ょ = 료. 료칸(旅館)!', mnemonicImage: 'ribbon', row: 'りゃ행', order: 91 },
+  // 탁음/반탁음 요음
+  { kana: 'ぎゃ', romaji: 'gya', korean: '갸', mnemonic: 'ぎ + ゃ = 갸.', mnemonicImage: 'key', row: 'ぎゃ행', order: 92 },
+  { kana: 'ぎゅ', romaji: 'gyu', korean: '규', mnemonic: 'ぎ + ゅ = 규.', mnemonicImage: 'key', row: 'ぎゃ행', order: 93 },
+  { kana: 'ぎょ', romaji: 'gyo', korean: '교', mnemonic: 'ぎ + ょ = 교.', mnemonicImage: 'key', row: 'ぎゃ행', order: 94 },
+  { kana: 'じゃ', romaji: 'ja', korean: '쟈', mnemonic: 'じ + ゃ = 쟈.', mnemonicImage: 'fish-hook', row: 'じゃ행', order: 95 },
+  { kana: 'じゅ', romaji: 'ju', korean: '쥬', mnemonic: 'じ + ゅ = 쥬.', mnemonicImage: 'fish-hook', row: 'じゃ행', order: 96 },
+  { kana: 'じょ', romaji: 'jo', korean: '죠', mnemonic: 'じ + ょ = 죠.', mnemonicImage: 'fish-hook', row: 'じゃ행', order: 97 },
+  { kana: 'びゃ', romaji: 'bya', korean: '뱌', mnemonic: 'び + ゃ = 뱌.', mnemonicImage: 'smile', row: 'びゃ행', order: 98 },
+  { kana: 'びゅ', romaji: 'byu', korean: '뷰', mnemonic: 'び + ゅ = 뷰.', mnemonicImage: 'smile', row: 'びゃ행', order: 99 },
+  { kana: 'びょ', romaji: 'byo', korean: '뵤', mnemonic: 'び + ょ = 뵤.', mnemonicImage: 'smile', row: 'びゃ행', order: 100 },
+  { kana: 'ぴゃ', romaji: 'pya', korean: '퍄', mnemonic: 'ぴ + ゃ = 퍄.', mnemonicImage: 'smile', row: 'ぴゃ행', order: 101 },
+  { kana: 'ぴゅ', romaji: 'pyu', korean: '퓨', mnemonic: 'ぴ + ゅ = 퓨.', mnemonicImage: 'smile', row: 'ぴゃ행', order: 102 },
+  { kana: 'ぴょ', romaji: 'pyo', korean: '표', mnemonic: 'ぴ + ょ = 표.', mnemonicImage: 'smile', row: 'ぴゃ행', order: 103 },
+]
+
+// === group helpers ===
+const allHiraganaCombined = [...hiraganaData, ...hiraganaDakuten, ...hiraganaHandakuten, ...hiraganaYoon]
+
+const hiraganaRowNames: Record<string, string> = {
+  'あ행': 'あ행 (모음)',
+  'か행': 'か행 (K)',
+  'さ행': 'さ행 (S)',
+  'た행': 'た행 (T)',
+  'な행': 'な행 (N)',
+  'は행': 'は행 (H)',
+  'ま행': 'ま행 (M)',
+  'や행': 'や행 (Y)',
+  'ら행': 'ら행 (R)',
+  'わ행': 'わ행 (W/N)',
+  // 탁음
+  'が행': 'が행 (G·탁음)',
+  'ざ행': 'ざ행 (Z·탁음)',
+  'だ행': 'だ행 (D·탁음)',
+  'ば행': 'ば행 (B·탁음)',
+  // 반탁음
+  'ぱ행': 'ぱ행 (P·반탁음)',
+  // 요음
+  'きゃ행': 'きゃ행 (Ky)',
+  'しゃ행': 'しゃ행 (Sh)',
+  'ちゃ행': 'ちゃ행 (Ch)',
+  'にゃ행': 'にゃ행 (Ny)',
+  'ひゃ행': 'ひゃ행 (Hy)',
+  'みゃ행': 'みゃ행 (My)',
+  'りゃ행': 'りゃ행 (Ry)',
+  'ぎゃ행': 'ぎゃ행 (Gy)',
+  'じゃ행': 'じゃ행 (J)',
+  'びゃ행': 'びゃ행 (By)',
+  'ぴゃ행': 'ぴゃ행 (Py)',
+}
+
+function buildRows(pool: KanaChar[]): KanaRow[] {
   const rowMap = new Map<string, KanaChar[]>()
-  for (const char of hiraganaData) {
+  for (const char of pool) {
     if (!rowMap.has(char.row)) rowMap.set(char.row, [])
     rowMap.get(char.row)!.push(char)
   }
-
-  const rowNames: Record<string, string> = {
-    'あ행': 'あ행 (모음)',
-    'か행': 'か행 (K)',
-    'さ행': 'さ행 (S)',
-    'た행': 'た행 (T)',
-    'な행': 'な행 (N)',
-    'は행': 'は행 (H)',
-    'ま행': 'ま행 (M)',
-    'や행': 'や행 (Y)',
-    'ら행': 'ら행 (R)',
-    'わ행': 'わ행 (W/N)',
-  }
-
   return Array.from(rowMap.entries()).map(([key, chars]) => ({
-    name: rowNames[key] || key,
+    name: hiraganaRowNames[key] || key,
     nameJp: key,
     chars: chars.sort((a, b) => a.order - b.order),
   }))
 }
 
+/** 청음만 (기본 46자) */
+export function getHiraganaRows(): KanaRow[] {
+  return buildRows(hiraganaData)
+}
+
+/** 탁음+반탁음 행들 */
+export function getHiraganaDakutenRows(): KanaRow[] {
+  return buildRows([...hiraganaDakuten, ...hiraganaHandakuten])
+}
+
+/** 요음 행들 */
+export function getHiraganaYoonRows(): KanaRow[] {
+  return buildRows(hiraganaYoon)
+}
+
+export function getAllHiraganaRows(): KanaRow[] {
+  return buildRows(allHiraganaCombined)
+}
+
+/** 청음만 (기존 동작) */
 export function getAllHiragana(): KanaChar[] {
   return [...hiraganaData].sort((a, b) => a.order - b.order)
+}
+
+/** 모든 히라가나 (청음 + 탁음 + 반탁음 + 요음) */
+export function getAllHiraganaFull(): KanaChar[] {
+  return [...allHiraganaCombined].sort((a, b) => a.order - b.order)
 }

@@ -1,16 +1,32 @@
 <script setup lang="ts">
 import type { KanaChar } from '~/data/hiragana'
+import type { ReviewQuality } from '~/composables/useSrs'
 
 const props = defineProps<{
   chars: KanaChar[]
   accentColor?: string
+  deck?: string  // 'hiragana' | 'katakana' | 'mixed'
+  /** parent has a next row teed up — show the "다음 행" button when finished */
+  hasNext?: boolean
+  /** label for the next-row button (e.g. "か행 →") */
+  nextLabel?: string
 }>()
 
 const emit = defineEmits<{
   complete: [score: number, total: number]
+  next: []
 }>()
 
 const color = computed(() => props.accentColor || 'ai')
+const deckName = computed(() => props.deck || 'kana')
+
+const srs = useSrs()
+const tts = useTts()
+onMounted(() => srs.load())
+
+function speak(text: string) {
+  tts.speak(text, { rate: 0.85 })
+}
 
 // ===== State machine: 'show' → 'mnemonic' → 'quiz' → 'result' → next =====
 type Phase = 'show' | 'mnemonic' | 'quiz' | 'result'
@@ -139,8 +155,18 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
+function srsId(c: KanaChar): string {
+  return `${deckName.value}:${c.kana}`
+}
+
 function init() {
-  queue.value = shuffle([...props.chars])
+  // Build a session that prioritizes due cards from SRS, then mixes in
+  // the rest of the row so the user can keep practicing.
+  const pool = props.chars.map(c => ({ ...c, id: srsId(c) }))
+  const session = srs.buildSession(pool, deckName.value, { maxDue: 30, newPerSession: pool.length })
+  // Fall back to the full row if SRS returned nothing (first run, no state).
+  const final = session.length > 0 ? session : pool
+  queue.value = shuffle(final.map(({ id, ...rest }) => rest as KanaChar))
   correctCount.value = 0
   totalAnswered.value = 0
   wrongSet.value = new Set()
@@ -202,10 +228,14 @@ function pick(answer: string) {
   selected.value = answer
   totalAnswered.value++
 
-  if (answer === current.value!.korean) {
+  const correct = answer === current.value!.korean
+
+  if (correct) {
     isCorrect.value = true
     correctCount.value++
     learnedInSession.value.add(current.value!.kana)
+    // gentle pronunciation cue
+    speak(current.value!.kana)
   } else {
     isCorrect.value = false
     wrongSet.value.add(current.value!.kana)
@@ -215,7 +245,13 @@ function pick(answer: string) {
   phaseKey.value++
 }
 
-function goNext() {
+function rate(quality: ReviewQuality) {
+  if (!current.value) return
+  srs.reviewQuality(srsId(current.value), deckName.value, quality)
+  if (quality === 'again') {
+    wrongSet.value.add(current.value.kana)
+    learnedInSession.value.delete(current.value.kana)
+  }
   loadNext()
 }
 
@@ -255,7 +291,15 @@ onMounted(() => init())
       <div class="flip-card w-full max-w-xs mx-auto aspect-[3/4] cursor-pointer" :class="{ flipped }" @click="!flipped && flipCard()">
         <div class="flip-card-inner">
           <!-- Front: The character -->
-          <div class="flip-card-front bg-card border border-fg-faint/15 p-6">
+          <div class="flip-card-front bg-card border border-fg-faint/15 p-6 relative">
+            <button
+              v-if="tts.supported.value"
+              class="absolute top-3 right-3 w-9 h-9 rounded-full bg-bg-inset hover:bg-bg-elevated flex items-center justify-center text-fg-muted hover:text-fg transition-all"
+              :aria-label="'발음 듣기'"
+              @click.stop="speak(current.kana)"
+            >
+              🔊
+            </button>
             <span class="kana-display text-8xl md:text-9xl text-fg-strong mb-4">{{ current.kana }}</span>
             <p class="text-sm text-fg-faint">탭해서 연상법 보기</p>
           </div>
@@ -282,6 +326,13 @@ onMounted(() => init())
     <div v-if="phase === 'quiz'" :key="'quiz-' + phaseKey" class="animate-fade-in-up">
       <div class="text-center mb-8">
         <div class="kana-display text-8xl md:text-9xl text-fg-strong mb-3">{{ current.kana }}</div>
+        <button
+          v-if="tts.supported.value"
+          class="text-xs text-fg-faint hover:text-fg inline-flex items-center gap-1 mb-1"
+          @click="speak(current.kana)"
+        >
+          🔊 발음 듣기
+        </button>
         <p class="text-sm text-fg-faint">이 글자의 발음은?</p>
       </div>
 
@@ -310,31 +361,24 @@ onMounted(() => init())
     <!-- ==================== PHASE: RESULT ==================== -->
     <div v-if="phase === 'result'" :key="'result-' + phaseKey" class="animate-fade-in-up">
       <!-- Correct -->
-      <div v-if="isCorrect" class="text-center">
+      <div v-if="isCorrect" class="text-center mb-5">
         <div class="animate-pop">
           <div class="kana-display text-7xl text-success mb-3">{{ current.kana }}</div>
         </div>
         <p class="text-success text-xl font-700 mb-1">정답!</p>
-        <p class="text-fg-muted text-sm mb-8">
+        <p class="text-fg-muted text-sm">
           {{ current.kana }} = {{ current.korean }} ({{ current.romaji }})
         </p>
-        <button
-          class="btn text-sm py-2.5 px-8 font-600"
-          :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
-          @click="goNext"
-        >
-          다음 글자 →
-        </button>
       </div>
 
       <!-- Incorrect -->
-      <div v-else>
+      <div v-else class="mb-5">
         <div class="text-center animate-shake">
           <div class="kana-display text-7xl text-error mb-3">{{ current.kana }}</div>
         </div>
         <p class="text-center text-error text-lg font-700 mb-4">틀렸어요!</p>
 
-        <div class="bg-card rounded-lg border border-fg-faint/15 p-5 mb-6 max-w-sm mx-auto">
+        <div class="bg-card rounded-lg border border-fg-faint/15 p-5 max-w-sm mx-auto">
           <div class="flex items-center justify-center gap-4 mb-4">
             <span class="kana-display text-5xl text-fg-strong">{{ current.kana }}</span>
             <span class="text-fg-faint text-2xl">=</span>
@@ -350,16 +394,24 @@ onMounted(() => init())
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="text-center">
-          <button
-            class="btn text-sm py-2.5 px-8 font-600"
-            :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
-            @click="goNext"
-          >
-            기억했어요, 다음 →
+      <!-- Anki ratings -->
+      <div class="max-w-sm mx-auto">
+        <p class="text-center text-xs text-fg-faint mb-2">기억의 강도를 선택하세요</p>
+        <div class="grid grid-cols-4 gap-2">
+          <button class="rating-btn rating-again" @click="rate('again')">
+            <span class="text-sm font-700">Again</span><span class="text-[10px] opacity-80">&lt;1m</span>
           </button>
-          <p class="text-xs text-fg-faint mt-2">이 글자는 나중에 다시 나와요</p>
+          <button class="rating-btn rating-hard" @click="rate('hard')">
+            <span class="text-sm font-700">Hard</span><span class="text-[10px] opacity-80">~1d</span>
+          </button>
+          <button class="rating-btn rating-good" @click="rate('good')">
+            <span class="text-sm font-700">Good</span><span class="text-[10px] opacity-80">~3d</span>
+          </button>
+          <button class="rating-btn rating-easy" @click="rate('easy')">
+            <span class="text-sm font-700">Easy</span><span class="text-[10px] opacity-80">~1w</span>
+          </button>
         </div>
       </div>
     </div>
@@ -385,12 +437,22 @@ onMounted(() => init())
       </div>
     </div>
 
-    <button
-      class="btn text-base py-3 px-10 font-700"
-      :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
-      @click="restart"
-    >
-      다시 연습
-    </button>
+    <p class="text-sm text-fg-muted mb-4">이 행을 어떻게 할까요?</p>
+    <div class="flex flex-wrap justify-center gap-2">
+      <button
+        class="btn text-sm py-2.5 px-5 font-600 border border-fg-faint/20 bg-card text-fg"
+        @click="restart"
+      >
+        🔁 한 번 더
+      </button>
+      <button
+        v-if="hasNext"
+        class="btn text-sm py-2.5 px-5 font-700"
+        :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
+        @click="emit('next')"
+      >
+        {{ nextLabel || '다음 행' }} →
+      </button>
+    </div>
   </div>
 </template>

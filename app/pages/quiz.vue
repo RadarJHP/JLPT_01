@@ -80,6 +80,7 @@ function goBack() {
         :key="quizType"
         :chars="quizChars"
         :accent-color="quizType === 'katakana' ? 'cta' : 'ai'"
+        :deck="quizType === 'mixed' ? 'kana-mixed' : (quizType as string)"
       />
     </div>
   </div>
