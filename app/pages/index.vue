@@ -6,7 +6,8 @@ import { getAllKanji } from '~/data/kanji'
 import { getAllGrammar } from '~/data/grammar'
 
 const srs = useSrs()
-onMounted(() => srs.load())
+const mix = useMixSettings()
+onMounted(() => { srs.load(); mix.load() })
 
 const allHiragana = getAllHiragana().map(c => ({ ...c, id: `hiragana:${c.kana}` }))
 const allKatakana = getAllKatakana().map(c => ({ ...c, id: `katakana:${c.kana}` }))
@@ -50,6 +51,41 @@ const overallProgress = computed(() => {
   const learned = hiraStats.value.learned + kataStats.value.learned + n5Stats.value.learned + n4Stats.value.learned + n3Stats.value.learned
   return total === 0 ? 0 : Math.round(learned / total * 100)
 })
+
+// Leech cards across all decks (kana + vocab) — items missed at least once.
+// Each entry carries a deck label so the UI can route the user back to where it lives.
+interface LeechRow {
+  id: string
+  display: string  // kana or word
+  reading: string
+  meaning: string
+  lapses: number
+  deck: string     // 'hiragana' | 'katakana' | 'vocab' | ...
+  href: string
+}
+const leechRows = computed<LeechRow[]>(() => {
+  const out: LeechRow[] = []
+  const hira = srs.getLeechCards(allHiragana, 1)
+  for (const c of hira) {
+    out.push({ id: c.id, display: c.kana, reading: c.romaji, meaning: c.korean, lapses: srs.root.value.cards[c.id].lapses, deck: 'hiragana', href: '/hiragana' })
+  }
+  const kata = srs.getLeechCards(allKatakana, 1)
+  for (const c of kata) {
+    out.push({ id: c.id, display: c.kana, reading: c.romaji, meaning: c.korean, lapses: srs.root.value.cards[c.id].lapses, deck: 'katakana', href: '/katakana' })
+  }
+  const vocab = srs.getLeechCards(getAllVocab(), 1)
+  for (const v of vocab) {
+    out.push({ id: v.id, display: v.word, reading: v.reading, meaning: v.meaning, lapses: srs.root.value.cards[v.id].lapses, deck: 'vocab', href: '/vocab' })
+  }
+  return out.sort((a, b) => b.lapses - a.lapses).slice(0, 10)
+})
+
+// Mix-ratio total for normalized display
+const mixTotal = computed(() => {
+  const s = mix.settings.value
+  return Math.max(s.current + s.mastered + s.words, 1)
+})
+const showMixPanel = ref(false)
 
 const greetings = ['おはよう', 'こんにちは', 'こんばんは']
 const greeting = computed(() => {
@@ -105,6 +141,98 @@ const greeting = computed(() => {
         <span class="btn-sakura font-700 text-sm">시작 →</span>
       </div>
     </NuxtLink>
+
+    <!-- Leech / weak items highlight -->
+    <section v-if="leechRows.length > 0" class="card p-4 border-2 border-error/30 bg-error-soft/30">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h2 class="text-sm font-700 text-error flex items-center gap-1.5">
+            <span>🩹</span> 자주 틀리는 것
+          </h2>
+          <p class="text-[11px] text-fg-muted">놓치지 말고 다시 봐요</p>
+        </div>
+        <NuxtLink to="/leech" class="btn text-xs py-1.5 px-3 font-700 bg-error text-bg-DEFAULT no-underline">
+          이것만 테스트 →
+        </NuxtLink>
+      </div>
+      <div class="space-y-1.5">
+        <NuxtLink
+          v-for="row in leechRows"
+          :key="row.id"
+          :to="row.href"
+          class="flex items-center gap-3 py-1.5 px-2 rounded-md no-underline hover:bg-error/10 transition-colors border border-error/15 bg-card"
+        >
+          <span class="kana-display text-lg text-error font-700 w-16 truncate">{{ row.display }}</span>
+          <span class="text-xs text-fg-muted font-en w-16 truncate">{{ row.reading }}</span>
+          <span class="text-xs text-fg flex-1 truncate">{{ row.meaning }}</span>
+          <span class="badge bg-error text-bg-DEFAULT text-[10px] font-700">×{{ row.lapses }}</span>
+        </NuxtLink>
+      </div>
+    </section>
+
+    <!-- Mix ratio settings -->
+    <section class="card">
+      <button
+        class="w-full p-4 flex items-center justify-between text-left"
+        @click="showMixPanel = !showMixPanel"
+      >
+        <div>
+          <h2 class="text-sm font-700 text-fg-strong flex items-center gap-1.5">
+            <span>⚙️</span> 출제 비율 설정
+          </h2>
+          <p class="text-[11px] text-fg-muted mt-0.5">
+            현재 행 {{ Math.round(mix.settings.value.current / mixTotal * 100) }}% ·
+            잘 맞추는 것 {{ Math.round(mix.settings.value.mastered / mixTotal * 100) }}% ·
+            단어 {{ Math.round(mix.settings.value.words / mixTotal * 100) }}%
+          </p>
+        </div>
+        <span class="text-fg-faint text-xs">{{ showMixPanel ? '닫기' : '편집' }}</span>
+      </button>
+      <div v-if="showMixPanel" class="px-4 pb-4 border-t border-fg-faint/10 pt-4 space-y-3">
+        <label class="block">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-fg-strong font-600">현재 행</span>
+            <span class="text-fg-muted font-en tabular-nums">{{ mix.settings.value.current }}</span>
+          </div>
+          <input
+            type="range" min="0" max="100" step="5"
+            :value="mix.settings.value.current"
+            class="w-full accent-ai"
+            @input="mix.update({ current: Number(($event.target as HTMLInputElement).value) })"
+          >
+        </label>
+        <label class="block">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-fg-strong font-600">잘 맞추는 것 (복습용)</span>
+            <span class="text-fg-muted font-en tabular-nums">{{ mix.settings.value.mastered }}</span>
+          </div>
+          <input
+            type="range" min="0" max="100" step="5"
+            :value="mix.settings.value.mastered"
+            class="w-full accent-matcha"
+            @input="mix.update({ mastered: Number(($event.target as HTMLInputElement).value) })"
+          >
+        </label>
+        <label class="block">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-fg-strong font-600">간단한 단어 (이미지 포함)</span>
+            <span class="text-fg-muted font-en tabular-nums">{{ mix.settings.value.words }}</span>
+          </div>
+          <input
+            type="range" min="0" max="100" step="5"
+            :value="mix.settings.value.words"
+            class="w-full accent-sakura"
+            @input="mix.update({ words: Number(($event.target as HTMLInputElement).value) })"
+          >
+        </label>
+        <button
+          class="text-[11px] text-fg-faint hover:text-fg underline"
+          @click="mix.reset()"
+        >
+          기본값으로 (60·20·20)
+        </button>
+      </div>
+    </section>
 
     <!-- Course cards -->
     <section>

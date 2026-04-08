@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { KanaChar } from '~/data/hiragana'
-import type { ReviewQuality } from '~/composables/useSrs'
+import { getAllHiraganaFull } from '~/data/hiragana'
+import { getAllKatakanaFull } from '~/data/katakana'
+import { getSimpleWordsForPool, simpleWordToKana } from '~/data/simpleWords'
+
+// Quiz item shape — extends KanaChar with optional emoji-image / word flag
+type QuizItem = KanaChar & { isWord?: boolean; emoji?: string }
 
 const props = defineProps<{
   chars: KanaChar[]
@@ -10,6 +15,8 @@ const props = defineProps<{
   hasNext?: boolean
   /** label for the next-row button (e.g. "か행 →") */
   nextLabel?: string
+  /** if true, run a leech-only session built from getLeechCards */
+  leechOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,7 +29,8 @@ const deckName = computed(() => props.deck || 'kana')
 
 const srs = useSrs()
 const tts = useTts()
-onMounted(() => srs.load())
+const mix = useMixSettings()
+onMounted(() => { srs.load(); mix.load() })
 
 function speak(text: string) {
   tts.speak(text, { rate: 0.85 })
@@ -32,8 +40,8 @@ function speak(text: string) {
 type Phase = 'show' | 'mnemonic' | 'quiz' | 'result'
 
 const phase = ref<Phase>('show')
-const queue = ref<KanaChar[]>([])
-const current = ref<KanaChar | null>(null)
+const queue = ref<QuizItem[]>([])
+const current = ref<QuizItem | null>(null)
 const options = ref<string[]>([])
 const selected = ref<string | null>(null)
 const isCorrect = ref<boolean | null>(null)
@@ -45,6 +53,8 @@ const finished = ref(false)
 const round = ref(1)
 const flipped = ref(false)
 const phaseKey = ref(0) // for re-triggering animations
+/** the row's primary kana — used to count progress against the target */
+const rowKanaSet = computed(() => new Set(props.chars.map(c => c.kana)))
 
 // SVG mnemonics (same as before, kept compact)
 const mnemonicSvgs: Record<string, string> = {
@@ -159,14 +169,54 @@ function srsId(c: KanaChar): string {
   return `${deckName.value}:${c.kana}`
 }
 
+/** All kana the user has at least introduced (for "잘 맞추는 것" pool). */
+function getMasteredKanaPool(): QuizItem[] {
+  // Pull from the same script (hiragana or katakana) so we don't mix scripts visually
+  const all: KanaChar[] = deckName.value === 'katakana'
+    ? getAllKatakanaFull()
+    : getAllHiraganaFull()
+  return all.filter(c => {
+    if (rowKanaSet.value.has(c.kana)) return false  // exclude the current row
+    const card = srs.root.value.cards[`${deckName.value}:${c.kana}`]
+    return card && card.introduced && (card.box >= 2 || card.totalCorrect >= 2)
+  })
+}
+
+/** Build the session queue using mix settings: current row + mastered + words. */
+function buildMixedQueue(): QuizItem[] {
+  const r = mix.ratios.value
+  const target = Math.max(props.chars.length, 6)
+
+  // Always include EVERY current-row character at least once
+  const currentItems: QuizItem[] = props.chars.map(c => ({ ...c }))
+
+  // Mastered kana sprinkled in
+  const masteredPool = getMasteredKanaPool()
+  const masteredCount = Math.round(target * (r.mastered / Math.max(r.current, 0.01)))
+  const masteredItems = shuffle(masteredPool).slice(0, masteredCount)
+
+  // Simple word pool — only words made of kana the learner has met
+  const knownKanaForWords = [
+    ...currentItems,
+    ...masteredPool,
+  ]
+  const wordPool = getSimpleWordsForPool(knownKanaForWords)
+  const wordCount = Math.round(target * (r.words / Math.max(r.current, 0.01)))
+  const wordItems: QuizItem[] = shuffle(wordPool).slice(0, wordCount).map(simpleWordToKana)
+
+  return shuffle([...currentItems, ...masteredItems, ...wordItems])
+}
+
 function init() {
-  // Build a session that prioritizes due cards from SRS, then mixes in
-  // the rest of the row so the user can keep practicing.
-  const pool = props.chars.map(c => ({ ...c, id: srsId(c) }))
-  const session = srs.buildSession(pool, deckName.value, { maxDue: 30, newPerSession: pool.length })
-  // Fall back to the full row if SRS returned nothing (first run, no state).
-  const final = session.length > 0 ? session : pool
-  queue.value = shuffle(final.map(({ id, ...rest }) => rest as KanaChar))
+  if (props.leechOnly) {
+    // Leech-only mode: show every card the learner has missed at least once
+    const pool = props.chars.map(c => ({ ...c, id: srsId(c) }))
+    const leeches = srs.getLeechCards(pool, 1)
+    const final = leeches.length > 0 ? leeches : pool
+    queue.value = shuffle(final.map(({ id, ...rest }) => rest as QuizItem))
+  } else {
+    queue.value = buildMixedQueue()
+  }
   correctCount.value = 0
   totalAnswered.value = 0
   wrongSet.value = new Set()
@@ -178,13 +228,16 @@ function init() {
 
 function loadNext() {
   if (queue.value.length === 0) {
-    const wrongChars = props.chars.filter(c => wrongSet.value.has(c.kana))
-    if (wrongChars.length > 0) {
-      queue.value = shuffle(wrongChars)
-      wrongSet.value = new Set()
-      round.value++
-      loadNext()
-      return
+    // Re-queue anything still in the wrong set for an in-session retry
+    if (wrongSet.value.size > 0) {
+      const retry = buildRetryQueue()
+      if (retry.length > 0) {
+        queue.value = shuffle(retry)
+        wrongSet.value = new Set()
+        round.value++
+        loadNext()
+        return
+      }
     }
     finished.value = true
     emit('complete', correctCount.value, totalAnswered.value)
@@ -198,12 +251,30 @@ function loadNext() {
   isCorrect.value = null
   phaseKey.value++
 
-  // Prepare quiz options
+  // Prepare quiz options — pull distractors from a pool wide enough
+  // even when the current row is small (e.g. word cards mid-row).
   const correct = current.value.korean
-  const allKorean = props.chars.filter(c => c.kana !== current.value!.kana).map(c => c.korean)
-  const unique = [...new Set(allKorean)]
+  const distractorPool = [
+    ...props.chars,
+    ...getMasteredKanaPool().slice(0, 20),
+  ].filter(c => c.korean && c.korean !== correct).map(c => c.korean)
+  const unique = [...new Set(distractorPool)]
   const wrongs = shuffle(unique).slice(0, 3)
   options.value = shuffle([correct, ...wrongs])
+}
+
+/** Build the retry batch from items the user got wrong this session. */
+function buildRetryQueue(): QuizItem[] {
+  const out: QuizItem[] = []
+  // include current row chars first
+  for (const c of props.chars) {
+    if (wrongSet.value.has(c.kana)) out.push({ ...c })
+  }
+  // also include any other items (mastered/word) tracked in wrongSet
+  // by reconstructing from the original mixed queue isn't possible here,
+  // so we just include current-row matches; word/mastered fail-cases get
+  // automatically retried by SRS in future sessions.
+  return out
 }
 
 function flipCard() {
@@ -228,29 +299,45 @@ function pick(answer: string) {
   selected.value = answer
   totalAnswered.value++
 
-  const correct = answer === current.value!.korean
+  const cur = current.value!
+  const correct = answer === cur.korean
+  const isRowChar = rowKanaSet.value.has(cur.kana)
 
   if (correct) {
     isCorrect.value = true
     correctCount.value++
-    learnedInSession.value.add(current.value!.kana)
-    // gentle pronunciation cue
-    speak(current.value!.kana)
+    if (isRowChar) learnedInSession.value.add(cur.kana)
+    // SRS: auto-rate as 'good' — no manual stage selection
+    srs.reviewQuality(srsId(cur), deckName.value, 'good')
+    speak(cur.kana)
   } else {
     isCorrect.value = false
-    wrongSet.value.add(current.value!.kana)
+    wrongSet.value.add(cur.kana)
+    if (isRowChar) learnedInSession.value.delete(cur.kana)
+    // SRS: auto-rate as 'again' so it surfaces again later
+    srs.reviewQuality(srsId(cur), deckName.value, 'again')
   }
 
   phase.value = 'result'
   phaseKey.value++
 }
 
-function rate(quality: ReviewQuality) {
-  if (!current.value) return
-  srs.reviewQuality(srsId(current.value), deckName.value, quality)
-  if (quality === 'again') {
+function continueNext() {
+  loadNext()
+}
+
+function deferForLater() {
+  // "다음에 다시 보기" — explicitly mark wrong + push to wrongSet,
+  // even if user got it right but felt unsure
+  if (current.value) {
+    if (isCorrect.value) {
+      // downgrade SRS slightly so it comes back sooner
+      srs.reviewQuality(srsId(current.value), deckName.value, 'again')
+      if (rowKanaSet.value.has(current.value.kana)) {
+        learnedInSession.value.delete(current.value.kana)
+      }
+    }
     wrongSet.value.add(current.value.kana)
-    learnedInSession.value.delete(current.value.kana)
   }
   loadNext()
 }
@@ -261,6 +348,17 @@ function restart() {
 
 const progressCount = computed(() => learnedInSession.value.size)
 const progressTotal = computed(() => props.chars.length)
+
+/** the visible glyph for an item — kana char or word emoji */
+function glyphFor(item: QuizItem | null): string {
+  return item?.kana || ''
+}
+function isEmojiImage(key: string | undefined): boolean {
+  return !!key && key.startsWith('emoji:')
+}
+function emojiOf(key: string | undefined): string {
+  return key ? key.replace(/^emoji:/, '') : ''
+}
 
 onMounted(() => init())
 </script>
@@ -290,7 +388,7 @@ onMounted(() => init())
     <div v-if="phase === 'show' || phase === 'mnemonic'" :key="'card-' + phaseKey" class="animate-fade-in-up">
       <div class="flip-card w-full max-w-xs mx-auto aspect-[3/4] cursor-pointer" :class="{ flipped }" @click="!flipped && flipCard()">
         <div class="flip-card-inner">
-          <!-- Front: The character -->
+          <!-- Front: The character / word -->
           <div class="flip-card-front bg-card border border-fg-faint/15 p-6 relative">
             <button
               v-if="tts.supported.value"
@@ -300,13 +398,15 @@ onMounted(() => init())
             >
               🔊
             </button>
-            <span class="kana-display text-8xl md:text-9xl text-fg-strong mb-4">{{ current.kana }}</span>
-            <p class="text-sm text-fg-faint">탭해서 연상법 보기</p>
+            <span v-if="current.isWord" class="text-7xl mb-3 leading-none">{{ current.emoji }}</span>
+            <span class="kana-display text-fg-strong mb-4" :class="current.isWord ? 'text-5xl md:text-6xl' : 'text-8xl md:text-9xl'">{{ current.kana }}</span>
+            <p class="text-sm text-fg-faint">탭해서 {{ current.isWord ? '뜻 보기' : '연상법 보기' }}</p>
           </div>
 
           <!-- Back: Mnemonic -->
           <div class="flip-card-back bg-elevated border border-fg-faint/20 p-5">
-            <svg viewBox="0 0 100 100" class="w-24 h-24 mb-3" :class="color === 'cta' ? 'text-cta' : 'text-ai'" v-html="getSvgContent(current.mnemonicImage)" />
+            <div v-if="isEmojiImage(current.mnemonicImage)" class="text-6xl mb-3 leading-none">{{ emojiOf(current.mnemonicImage) }}</div>
+            <svg v-else viewBox="0 0 100 100" class="w-24 h-24 mb-3" :class="color === 'cta' ? 'text-cta' : 'text-ai'" v-html="getSvgContent(current.mnemonicImage)" />
             <div class="kana-display text-4xl text-fg-strong mb-1">{{ current.kana }}</div>
             <div class="text-lg font-600 text-fg mb-2">{{ current.korean }} <span class="text-fg-muted font-en text-sm">({{ current.romaji }})</span></div>
             <p class="text-sm text-fg-muted leading-relaxed text-center px-2 mb-4">{{ current.mnemonic }}</p>
@@ -325,7 +425,8 @@ onMounted(() => init())
     <!-- ==================== PHASE: QUIZ ==================== -->
     <div v-if="phase === 'quiz'" :key="'quiz-' + phaseKey" class="animate-fade-in-up">
       <div class="text-center mb-8">
-        <div class="kana-display text-8xl md:text-9xl text-fg-strong mb-3">{{ current.kana }}</div>
+        <div v-if="current.isWord" class="text-7xl mb-2 leading-none">{{ current.emoji }}</div>
+        <div class="kana-display text-fg-strong mb-3" :class="current.isWord ? 'text-5xl md:text-6xl' : 'text-8xl md:text-9xl'">{{ current.kana }}</div>
         <button
           v-if="tts.supported.value"
           class="text-xs text-fg-faint hover:text-fg inline-flex items-center gap-1 mb-1"
@@ -333,7 +434,7 @@ onMounted(() => init())
         >
           🔊 발음 듣기
         </button>
-        <p class="text-sm text-fg-faint">이 글자의 발음은?</p>
+        <p class="text-sm text-fg-faint">{{ current.isWord ? '이 단어의 뜻은?' : '이 글자의 발음은?' }}</p>
       </div>
 
       <div class="grid grid-cols-2 gap-3 max-w-xs mx-auto">
@@ -389,30 +490,29 @@ onMounted(() => init())
           </div>
           <div class="bg-bg rounded-sm p-3 border border-fg-faint/8">
             <div class="flex items-start gap-3">
-              <svg viewBox="0 0 100 100" class="w-12 h-12 shrink-0" :class="color === 'cta' ? 'text-cta' : 'text-ai'" v-html="getSvgContent(current.mnemonicImage)" />
+              <div v-if="isEmojiImage(current.mnemonicImage)" class="text-3xl shrink-0 leading-none">{{ emojiOf(current.mnemonicImage) }}</div>
+              <svg v-else viewBox="0 0 100 100" class="w-12 h-12 shrink-0" :class="color === 'cta' ? 'text-cta' : 'text-ai'" v-html="getSvgContent(current.mnemonicImage)" />
               <p class="text-sm text-fg leading-relaxed">{{ current.mnemonic }}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Anki ratings -->
-      <div class="max-w-sm mx-auto">
-        <p class="text-center text-xs text-fg-faint mb-2">기억의 강도를 선택하세요</p>
-        <div class="grid grid-cols-4 gap-2">
-          <button class="rating-btn rating-again" @click="rate('again')">
-            <span class="text-sm font-700">Again</span><span class="text-[10px] opacity-80">&lt;1m</span>
-          </button>
-          <button class="rating-btn rating-hard" @click="rate('hard')">
-            <span class="text-sm font-700">Hard</span><span class="text-[10px] opacity-80">~1d</span>
-          </button>
-          <button class="rating-btn rating-good" @click="rate('good')">
-            <span class="text-sm font-700">Good</span><span class="text-[10px] opacity-80">~3d</span>
-          </button>
-          <button class="rating-btn rating-easy" @click="rate('easy')">
-            <span class="text-sm font-700">Easy</span><span class="text-[10px] opacity-80">~1w</span>
-          </button>
-        </div>
+      <!-- Continue / defer -->
+      <div class="max-w-sm mx-auto flex flex-col gap-2">
+        <button
+          class="btn w-full py-3 font-700 text-sm"
+          :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
+          @click="continueNext"
+        >
+          {{ isCorrect ? '다음 →' : '확인했어요 →' }}
+        </button>
+        <button
+          class="btn w-full py-2.5 text-xs font-600 border border-fg-faint/20 bg-card text-fg-muted hover:text-fg"
+          @click="deferForLater"
+        >
+          🕘 다음에 다시 보기
+        </button>
       </div>
     </div>
   </div>
@@ -437,21 +537,32 @@ onMounted(() => init())
       </div>
     </div>
 
-    <p class="text-sm text-fg-muted mb-4">이 행을 어떻게 할까요?</p>
-    <div class="flex flex-wrap justify-center gap-2">
+    <!-- Next-row confirmation question -->
+    <div v-if="hasNext" class="card p-5 max-w-sm mx-auto border-2" :class="color === 'cta' ? 'border-cta/30' : 'border-ai/30'">
+      <p class="text-base font-700 text-fg-strong mb-1">다음 행으로 넘어갈까요?</p>
+      <p class="text-xs text-fg-muted mb-4">다음: <span class="font-600 text-fg">{{ nextLabel || '다음 행' }}</span></p>
+      <div class="flex gap-2">
+        <button
+          class="btn flex-1 py-2.5 text-sm font-600 border border-fg-faint/20 bg-card text-fg"
+          @click="restart"
+        >
+          🔁 한 번 더
+        </button>
+        <button
+          class="btn flex-1 py-2.5 text-sm font-700"
+          :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
+          @click="emit('next')"
+        >
+          네, 다음 행 →
+        </button>
+      </div>
+    </div>
+    <div v-else class="flex flex-wrap justify-center gap-2">
       <button
         class="btn text-sm py-2.5 px-5 font-600 border border-fg-faint/20 bg-card text-fg"
         @click="restart"
       >
         🔁 한 번 더
-      </button>
-      <button
-        v-if="hasNext"
-        class="btn text-sm py-2.5 px-5 font-700"
-        :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
-        @click="emit('next')"
-      >
-        {{ nextLabel || '다음 행' }} →
       </button>
     </div>
   </div>
