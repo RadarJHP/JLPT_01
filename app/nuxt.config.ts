@@ -2,6 +2,12 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   devtools: { enabled: true },
 
+  // localStorage 기반 순수 정적 사이트 — Amplify의 자동 amplify 프리셋 무시하고
+  // 어디서 빌드하든 .output/public 산출물을 만들도록 고정.
+  nitro: {
+    preset: 'static',
+  },
+
   modules: ['@unocss/nuxt'],
 
   app: {
