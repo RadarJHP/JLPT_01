@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { VocabItem } from '~/data/vocab'
-import type { ReviewQuality } from '~/composables/useSrs'
 
 const props = defineProps<{
   cards: VocabItem[]      // pool to study
@@ -138,33 +137,51 @@ function goToQuiz() {
   }, 350)
 }
 
+// Timer for the auto-advance countdown after a result
+let advanceTimer: ReturnType<typeof setTimeout> | null = null
+function clearAdvanceTimer() {
+  if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null }
+}
+
 function pick(answer: string) {
   if (selected.value !== null) return
   selected.value = answer
   totalAnswered.value++
+  const cur = current.value!
   const correct = answer === correctAnswer.value
   if (correct) {
     isCorrect.value = true
     correctCount.value++
-    studied.value.push(current.value!)
-    speak(current.value!.reading || current.value!.word)
+    studied.value.push(cur)
+    speak(cur.reading || cur.word)
+    srs.reviewQuality(cur.id, props.deck, 'good')
   } else {
     isCorrect.value = false
-    wrongIds.value.add(current.value!.id)
+    wrongIds.value.add(cur.id)
+    srs.reviewQuality(cur.id, props.deck, 'again')
   }
   phase.value = 'result'
   phaseKey.value++
+  // Auto-advance after 2 seconds — user doesn't have to choose anything.
+  clearAdvanceTimer()
+  advanceTimer = setTimeout(() => loadNext(), 2000)
 }
 
-function rate(quality: ReviewQuality) {
+function markNeedsReview() {
   if (!current.value) return
-  srs.reviewQuality(current.value.id, props.deck, quality)
-  // If the user marks it 'again', make sure it gets requeued in this session
-  if (quality === 'again') {
-    wrongIds.value.add(current.value.id)
-  }
+  // Treat as a forced "again" — schedule it back into this session and reset SRS
+  srs.reviewQuality(current.value.id, props.deck, 'again')
+  wrongIds.value.add(current.value.id)
+  clearAdvanceTimer()
   loadNext()
 }
+
+function skipToNext() {
+  clearAdvanceTimer()
+  loadNext()
+}
+
+onUnmounted(() => clearAdvanceTimer())
 
 function speak(text: string) {
   tts.speak(text, { rate: 0.85 })
@@ -339,28 +356,27 @@ watch(() => props.cards, () => init())
         </div>
       </div>
 
-      <!-- Anki-style rating buttons -->
-      <div class="max-w-sm mx-auto">
-        <p class="text-center text-xs text-fg-faint mb-2">기억의 강도를 선택하세요</p>
-        <div class="grid grid-cols-4 gap-2">
-          <button class="rating-btn rating-again" @click="rate('again')">
-            <span class="text-sm font-700">Again</span>
-            <span class="text-[10px] opacity-80">&lt;1m</span>
+      <!-- Auto-advance + 복습 필요 표시 -->
+      <div class="max-w-sm mx-auto flex flex-col gap-2">
+        <div class="flex items-center gap-2 text-[11px] text-fg-faint justify-center">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-fg-muted animate-pulse" />
+          2초 후 자동으로 넘어가요
+        </div>
+        <div class="flex gap-2">
+          <button
+            class="btn flex-1 py-2.5 text-xs font-600 border border-fg-faint/20 bg-card text-fg-muted hover:text-fg"
+            @click="markNeedsReview"
+          >
+            🕘 복습 필요
           </button>
-          <button class="rating-btn rating-hard" @click="rate('hard')">
-            <span class="text-sm font-700">Hard</span>
-            <span class="text-[10px] opacity-80">~1d</span>
-          </button>
-          <button class="rating-btn rating-good" @click="rate('good')">
-            <span class="text-sm font-700">Good</span>
-            <span class="text-[10px] opacity-80">~3d</span>
-          </button>
-          <button class="rating-btn rating-easy" @click="rate('easy')">
-            <span class="text-sm font-700">Easy</span>
-            <span class="text-[10px] opacity-80">~1w</span>
+          <button
+            class="btn flex-1 py-2.5 text-xs font-700"
+            :class="colorClasses.btn"
+            @click="skipToNext"
+          >
+            바로 다음 →
           </button>
         </div>
-        <p v-if="!isCorrect" class="text-xs text-fg-faint text-center mt-2">선택에 따라 다음 등장 시점이 달라져요</p>
       </div>
     </div>
   </div>

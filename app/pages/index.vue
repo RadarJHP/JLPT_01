@@ -94,6 +94,35 @@ const greeting = computed(() => {
   if (h < 18) return greetings[1]
   return greetings[2]
 })
+
+// Playful encouragement phrases — one is picked at random per page load
+const encouragements = [
+  { title: '오늘도 한 글자만 더! 🍡', sub: '한 글자가 모여 일본 드라마가 돼요' },
+  { title: '머리에 にほんご 씨앗 심기 🌱', sub: '잊혀도 괜찮아요, 다시 심으면 그만' },
+  { title: '졸리면 카타카나, 안 졸리면 한자 ☕', sub: '오늘의 컨디션에 맞춰 가요' },
+  { title: '틀려도 대미지 0 ⚔️', sub: '실수는 학습 코인입니다' },
+  { title: '5분만, 진짜 5분만 ⏱️', sub: '근데 5분이 50분 되는 마법' },
+  { title: '오 천재 아니야? 🤔', sub: '어제보다 한 끗 더 잘하고 있어요' },
+  { title: '뇌에 와사비 한 점 🍣', sub: '톡 쏘는 자극이 기억을 깨워요' },
+  { title: '연속 학습은 곧 일본 여행 ✈️', sub: '편의점에서 안 헤매기 챌린지' },
+  { title: 'がんばれ、지형! 🔥', sub: '당신을 믿는 1人이 여기 있어요' },
+  { title: '단어 하나 = 자신감 1 🏆', sub: '오늘의 +1을 해봐요' },
+  { title: '뇌야 일어나, 출근이야 🧠', sub: '커피보다 빠른 SRS 한 잔' },
+  { title: '오늘의 목표: 안 까먹기 💪', sub: '낮아 보이지만 의외로 어려움' },
+]
+const encouragement = ref(encouragements[0])
+onMounted(() => {
+  encouragement.value = encouragements[Math.floor(Math.random() * encouragements.length)]
+})
+
+// Flip state for the leech card grid — keyed by leech id
+const flippedLeeches = ref<Set<string>>(new Set())
+function toggleLeechFlip(id: string) {
+  const next = new Set(flippedLeeches.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  flippedLeeches.value = next
+}
 </script>
 
 <template>
@@ -142,31 +171,41 @@ const greeting = computed(() => {
       </div>
     </NuxtLink>
 
-    <!-- Leech / weak items highlight -->
+    <!-- Leech / weak items — flippable cards -->
     <section v-if="leechRows.length > 0" class="card p-4 border-2 border-error/30 bg-error-soft/30">
       <div class="flex items-center justify-between mb-3">
         <div>
           <h2 class="text-sm font-700 text-error flex items-center gap-1.5">
             <span>🩹</span> 자주 틀리는 것
           </h2>
-          <p class="text-[11px] text-fg-muted">놓치지 말고 다시 봐요</p>
+          <p class="text-[11px] text-fg-muted">탭하면 뜻이 보여요</p>
         </div>
         <NuxtLink to="/leech" class="btn text-xs py-1.5 px-3 font-700 bg-error text-bg-DEFAULT no-underline">
           이것만 테스트 →
         </NuxtLink>
       </div>
-      <div class="space-y-1.5">
-        <NuxtLink
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div
           v-for="row in leechRows"
           :key="row.id"
-          :to="row.href"
-          class="flex items-center gap-3 py-1.5 px-2 rounded-md no-underline hover:bg-error/10 transition-colors border border-error/15 bg-card"
+          class="flip-card aspect-[5/4] cursor-pointer"
+          :class="{ flipped: flippedLeeches.has(row.id) }"
+          @click="toggleLeechFlip(row.id)"
         >
-          <span class="kana-display text-lg text-error font-700 w-16 truncate">{{ row.display }}</span>
-          <span class="text-xs text-fg-muted font-en w-16 truncate">{{ row.reading }}</span>
-          <span class="text-xs text-fg flex-1 truncate">{{ row.meaning }}</span>
-          <span class="badge bg-error text-bg-DEFAULT text-[10px] font-700">×{{ row.lapses }}</span>
-        </NuxtLink>
+          <div class="flip-card-inner">
+            <!-- Front: Japanese -->
+            <div class="flip-card-front bg-card border-2 border-error/30 rounded-md p-2 flex flex-col items-center justify-center relative">
+              <span class="absolute top-1 right-1.5 text-[9px] font-700 text-error bg-error-soft rounded-full px-1.5">×{{ row.lapses }}</span>
+              <span class="kana-display text-xl md:text-2xl text-fg-strong text-center leading-tight px-1 truncate max-w-full">{{ row.display }}</span>
+              <span class="text-[10px] text-fg-faint font-en mt-0.5 truncate max-w-full">{{ row.reading }}</span>
+            </div>
+            <!-- Back: meaning -->
+            <div class="flip-card-back bg-error-soft border-2 border-error/40 rounded-md p-2 flex flex-col items-center justify-center">
+              <span class="text-sm font-700 text-error text-center leading-tight">{{ row.meaning }}</span>
+              <span class="text-[9px] text-fg-muted mt-1 uppercase tracking-wider">{{ row.deck }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -345,14 +384,14 @@ const greeting = computed(() => {
       </div>
     </section>
 
-    <!-- N3 path progress -->
+    <!-- Random encouragement + progress -->
     <section class="card p-5">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <h2 class="text-sm font-700 text-fg-strong">🎯 N3로 가는 길</h2>
-          <p class="text-xs text-fg-muted">전체 진행도</p>
+      <div class="flex items-center justify-between mb-3 gap-3">
+        <div class="min-w-0">
+          <h2 class="text-sm font-700 text-fg-strong truncate">{{ encouragement.title }}</h2>
+          <p class="text-xs text-fg-muted truncate">{{ encouragement.sub }}</p>
         </div>
-        <div class="text-2xl font-800 text-sakura font-en tabular-nums">{{ overallProgress }}%</div>
+        <div class="text-2xl font-800 text-sakura font-en tabular-nums shrink-0">{{ overallProgress }}%</div>
       </div>
       <div class="h-2 bg-fg-faint/12 rounded-full overflow-hidden mb-4">
         <div

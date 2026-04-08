@@ -293,6 +293,12 @@ function goToQuiz() {
   }, 400)
 }
 
+// Auto-advance timer for the result phase
+let advanceTimer: ReturnType<typeof setTimeout> | null = null
+function clearAdvanceTimer() {
+  if (advanceTimer) { clearTimeout(advanceTimer); advanceTimer = null }
+}
+
 function pick(answer: string) {
   if (selected.value !== null) return
 
@@ -320,18 +326,21 @@ function pick(answer: string) {
 
   phase.value = 'result'
   phaseKey.value++
+  // Auto-advance 2 seconds later — no manual rating step required
+  clearAdvanceTimer()
+  advanceTimer = setTimeout(() => loadNext(), 2000)
 }
 
 function continueNext() {
+  clearAdvanceTimer()
   loadNext()
 }
 
 function deferForLater() {
-  // "다음에 다시 보기" — explicitly mark wrong + push to wrongSet,
-  // even if user got it right but felt unsure
+  // "복습 필요" — push to in-session retry + reset SRS box
+  clearAdvanceTimer()
   if (current.value) {
     if (isCorrect.value) {
-      // downgrade SRS slightly so it comes back sooner
       srs.reviewQuality(srsId(current.value), deckName.value, 'again')
       if (rowKanaSet.value.has(current.value.kana)) {
         learnedInSession.value.delete(current.value.kana)
@@ -341,6 +350,8 @@ function deferForLater() {
   }
   loadNext()
 }
+
+onUnmounted(() => clearAdvanceTimer())
 
 function restart() {
   init()
@@ -498,21 +509,27 @@ onMounted(() => init())
         </div>
       </div>
 
-      <!-- Continue / defer -->
+      <!-- Auto-advance + 복습 필요 -->
       <div class="max-w-sm mx-auto flex flex-col gap-2">
-        <button
-          class="btn w-full py-3 font-700 text-sm"
-          :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
-          @click="continueNext"
-        >
-          {{ isCorrect ? '다음 →' : '확인했어요 →' }}
-        </button>
-        <button
-          class="btn w-full py-2.5 text-xs font-600 border border-fg-faint/20 bg-card text-fg-muted hover:text-fg"
-          @click="deferForLater"
-        >
-          🕘 다음에 다시 보기
-        </button>
+        <div class="flex items-center gap-2 text-[11px] text-fg-faint justify-center">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-fg-muted animate-pulse" />
+          2초 후 자동으로 넘어가요
+        </div>
+        <div class="flex gap-2">
+          <button
+            class="btn flex-1 py-2.5 text-xs font-600 border border-fg-faint/20 bg-card text-fg-muted hover:text-fg"
+            @click="deferForLater"
+          >
+            🕘 복습 필요
+          </button>
+          <button
+            class="btn flex-1 py-2.5 text-xs font-700"
+            :class="color === 'cta' ? 'bg-cta text-bg-DEFAULT' : 'bg-ai text-bg-DEFAULT'"
+            @click="continueNext"
+          >
+            바로 다음 →
+          </button>
+        </div>
       </div>
     </div>
   </div>

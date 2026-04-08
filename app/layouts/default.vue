@@ -40,7 +40,7 @@ function isActive(path: string) {
         <NuxtLink to="/" class="flex items-center gap-2 text-fg-strong font-700 text-base no-underline shrink-0">
           <span v-if="!isStealth" class="kana-display text-ai text-xl animate-float">あ</span>
           <span v-else class="text-fg-muted text-sm font-600">📁</span>
-          <span v-if="!isStealth" class="font-kr text-sm hidden sm:inline">にほんご<span class="text-cta ml-0.5">Duel</span></span>
+          <span v-if="!isStealth" class="text-jp text-sm hidden sm:inline">ジヒョン<span class="text-cta ml-0.5">のノート</span></span>
           <span v-else class="text-sm font-600 hidden sm:inline stealth-mute">Quarterly Report</span>
         </NuxtLink>
 
