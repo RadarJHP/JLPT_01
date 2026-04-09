@@ -48,6 +48,8 @@ const isCorrect = ref<boolean | null>(null)
 const totalAnswered = ref(0)
 const correctCount = ref(0)
 const wrongSet = ref<Set<string>>(new Set())
+/** Tracks how many times each wrong item has been answered correctly in retry rounds */
+const wrongCorrectCount = ref<Map<string, number>>(new Map())
 const learnedInSession = ref<Set<string>>(new Set())
 const finished = ref(false)
 const round = ref(1)
@@ -204,7 +206,9 @@ function buildMixedQueue(): QuizItem[] {
   const wordCount = Math.round(target * (r.words / Math.max(r.current, 0.01)))
   const wordItems: QuizItem[] = shuffle(wordPool).slice(0, wordCount).map(simpleWordToKana)
 
-  return shuffle([...currentItems, ...masteredItems, ...wordItems])
+  // Current row items first so the user sees their selected row immediately,
+  // then sprinkle in mastered + word items afterwards
+  return [...shuffle(currentItems), ...shuffle([...masteredItems, ...wordItems])]
 }
 
 function init() {
@@ -220,6 +224,7 @@ function init() {
   correctCount.value = 0
   totalAnswered.value = 0
   wrongSet.value = new Set()
+  wrongCorrectCount.value = new Map()
   learnedInSession.value = new Set()
   finished.value = false
   round.value = 1
@@ -228,16 +233,14 @@ function init() {
 
 function loadNext() {
   if (queue.value.length === 0) {
-    // Re-queue anything still in the wrong set for an in-session retry
-    if (wrongSet.value.size > 0) {
-      const retry = buildRetryQueue()
-      if (retry.length > 0) {
-        queue.value = shuffle(retry)
-        wrongSet.value = new Set()
-        round.value++
-        loadNext()
-        return
-      }
+    // Re-queue anything still needing verification (wrong items need 2 correct answers)
+    const retry = buildRetryQueue()
+    if (retry.length > 0) {
+      queue.value = shuffle(retry)
+      wrongSet.value = new Set()
+      round.value++
+      loadNext()
+      return
     }
     finished.value = true
     emit('complete', correctCount.value, totalAnswered.value)
@@ -263,17 +266,21 @@ function loadNext() {
   options.value = shuffle([correct, ...wrongs])
 }
 
-/** Build the retry batch from items the user got wrong this session. */
+/** Track all items seen in session so we can reconstruct retry items. */
+const sessionItemMap = ref<Map<string, QuizItem>>(new Map())
+
+/** Build the retry batch from items the user got wrong this session.
+ *  Items need 2 correct answers before being cleared from retry. */
 function buildRetryQueue(): QuizItem[] {
   const out: QuizItem[] = []
-  // include current row chars first
-  for (const c of props.chars) {
-    if (wrongSet.value.has(c.kana)) out.push({ ...c })
+  // All items ever added to wrongSet that haven't hit 2 correct yet
+  for (const [kana, item] of sessionItemMap.value) {
+    const correctHits = wrongCorrectCount.value.get(kana) || 0
+    // Still in wrongSet (just got wrong) OR not yet verified twice
+    if (wrongSet.value.has(kana) || (correctHits > 0 && correctHits < 2)) {
+      out.push({ ...item })
+    }
   }
-  // also include any other items (mastered/word) tracked in wrongSet
-  // by reconstructing from the original mixed queue isn't possible here,
-  // so we just include current-row matches; word/mastered fail-cases get
-  // automatically retried by SRS in future sessions.
   return out
 }
 
@@ -309,16 +316,25 @@ function pick(answer: string) {
   const correct = answer === cur.korean
   const isRowChar = rowKanaSet.value.has(cur.kana)
 
+  // Track item for retry reconstruction
+  sessionItemMap.value.set(cur.kana, { ...cur })
+
   if (correct) {
     isCorrect.value = true
     correctCount.value++
     if (isRowChar) learnedInSession.value.add(cur.kana)
+    // Track correct count for wrong items that are being re-verified
+    if (wrongCorrectCount.value.has(cur.kana) || wrongSet.value.has(cur.kana)) {
+      wrongCorrectCount.value.set(cur.kana, (wrongCorrectCount.value.get(cur.kana) || 0) + 1)
+    }
     // SRS: auto-rate as 'good' — no manual stage selection
     srs.reviewQuality(srsId(cur), deckName.value, 'good')
     speak(cur.kana)
   } else {
     isCorrect.value = false
     wrongSet.value.add(cur.kana)
+    // Reset correct streak on wrong answer — must prove mastery again
+    wrongCorrectCount.value.set(cur.kana, 0)
     if (isRowChar) learnedInSession.value.delete(cur.kana)
     // SRS: auto-rate as 'again' so it surfaces again later
     srs.reviewQuality(srsId(cur), deckName.value, 'again')
@@ -347,6 +363,8 @@ function deferForLater() {
       }
     }
     wrongSet.value.add(current.value.kana)
+    wrongCorrectCount.value.set(current.value.kana, 0)
+    sessionItemMap.value.set(current.value.kana, { ...current.value })
   }
   loadNext()
 }

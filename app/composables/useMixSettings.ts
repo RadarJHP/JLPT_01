@@ -22,7 +22,7 @@ export interface MixSettings {
 const STORAGE_KEY = 'nihongo-duel-mix-v1'
 
 function defaultSettings(): MixSettings {
-  return { current: 60, mastered: 20, words: 20 }
+  return { current: 55, mastered: 20, words: 25 }
 }
 
 export function useMixSettings() {

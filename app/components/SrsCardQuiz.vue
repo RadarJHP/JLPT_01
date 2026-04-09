@@ -42,6 +42,8 @@ const isCorrect = ref<boolean | null>(null)
 const totalAnswered = ref(0)
 const correctCount = ref(0)
 const wrongIds = ref<Set<string>>(new Set())
+/** Tracks how many times each wrong item was answered correctly in retry rounds */
+const wrongCorrectCount = ref<Map<string, number>>(new Map())
 const finished = ref(false)
 const round = ref(1)
 const phaseKey = ref(0)
@@ -71,6 +73,7 @@ function init() {
   sessionSize.value = queue.value.length
   studied.value = []
   wrongIds.value = new Set()
+  wrongCorrectCount.value = new Map()
   totalAnswered.value = 0
   correctCount.value = 0
   finished.value = false
@@ -80,9 +83,13 @@ function init() {
 
 function loadNext() {
   if (queue.value.length === 0) {
-    // Re-queue items missed in this session for an immediate redo round
-    if (wrongIds.value.size > 0) {
-      const requeue = props.cards.filter(c => wrongIds.value.has(c.id))
+    // Re-queue items that still need verification (wrong items need 2 correct answers)
+    const requeue = props.cards.filter(c => {
+      const hits = wrongCorrectCount.value.get(c.id) || 0
+      // Still freshly wrong OR not yet verified twice
+      return wrongIds.value.has(c.id) || (hits > 0 && hits < 2)
+    })
+    if (requeue.length > 0) {
       queue.value = shuffle(requeue)
       wrongIds.value = new Set()
       round.value++
@@ -154,10 +161,16 @@ function pick(answer: string) {
     correctCount.value++
     studied.value.push(cur)
     speak(cur.reading || cur.word)
+    // Track correct count for wrong items being re-verified
+    if (wrongCorrectCount.value.has(cur.id) || wrongIds.value.has(cur.id)) {
+      wrongCorrectCount.value.set(cur.id, (wrongCorrectCount.value.get(cur.id) || 0) + 1)
+    }
     srs.reviewQuality(cur.id, props.deck, 'good')
   } else {
     isCorrect.value = false
     wrongIds.value.add(cur.id)
+    // Reset correct streak on wrong answer
+    wrongCorrectCount.value.set(cur.id, 0)
     srs.reviewQuality(cur.id, props.deck, 'again')
   }
   phase.value = 'result'
@@ -172,6 +185,7 @@ function markNeedsReview() {
   // Treat as a forced "again" — schedule it back into this session and reset SRS
   srs.reviewQuality(current.value.id, props.deck, 'again')
   wrongIds.value.add(current.value.id)
+  wrongCorrectCount.value.set(current.value.id, 0)
   clearAdvanceTimer()
   loadNext()
 }
