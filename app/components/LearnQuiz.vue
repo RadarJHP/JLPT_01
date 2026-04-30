@@ -45,6 +45,12 @@ const current = ref<QuizItem | null>(null)
 const options = ref<string[]>([])
 const selected = ref<string | null>(null)
 const isCorrect = ref<boolean | null>(null)
+/** What the user must match. For kana practice this is the OPPOSITE-script glyph
+ *  (e.g. studying katakana → answer is the matching hiragana). For words / fallback
+ *  it stays as the Korean reading. */
+const correctAnswer = ref<string>('')
+/** True when options are kana glyphs (so we render with the kana-display font). */
+const optionsAreKana = ref<boolean>(false)
 const totalAnswered = ref(0)
 const correctCount = ref(0)
 const wrongSet = ref<Set<string>>(new Set())
@@ -184,6 +190,26 @@ function getMasteredKanaPool(): QuizItem[] {
   })
 }
 
+/** Map romaji → opposite-script glyph, so we can ask "what's the matching ア for あ?".
+ *  Built lazily based on the current deck. Returns null for non-kana decks (e.g. mixed). */
+const oppositeKanaMap = computed<Map<string, string> | null>(() => {
+  const isHira = deckName.value === 'hiragana'
+  const isKata = deckName.value === 'katakana'
+  if (!isHira && !isKata) return null
+  const opposite: KanaChar[] = isHira ? getAllKatakanaFull() : getAllHiraganaFull()
+  const m = new Map<string, string>()
+  for (const c of opposite) {
+    // First glyph wins — for ambiguous romaji (じ↔ぢ, ず↔づ) we get the common one
+    if (!m.has(c.romaji)) m.set(c.romaji, c.kana)
+  }
+  return m
+})
+
+/** Display label for the opposite script — used in the quiz prompt. */
+const oppositeScriptLabel = computed(() =>
+  deckName.value === 'hiragana' ? '카타카나' : '히라가나',
+)
+
 /** Build the session queue using mix settings: current row + mastered + words. */
 function buildMixedQueue(): QuizItem[] {
   const r = mix.ratios.value
@@ -254,16 +280,41 @@ function loadNext() {
   isCorrect.value = null
   phaseKey.value++
 
-  // Prepare quiz options — pull distractors from a pool wide enough
-  // even when the current row is small (e.g. word cards mid-row).
-  const correct = current.value.korean
-  const distractorPool = [
-    ...props.chars,
-    ...getMasteredKanaPool().slice(0, 20),
-  ].filter(c => c.korean && c.korean !== correct).map(c => c.korean)
-  const unique = [...new Set(distractorPool)]
-  const wrongs = shuffle(unique).slice(0, 3)
-  options.value = shuffle([correct, ...wrongs])
+  // Build a wide distractor pool so options stay full even mid-row or with small decks.
+  // Cast to QuizItem[] because mastered/word items may carry isWord/emoji flags.
+  const distractorPool: QuizItem[] = [
+    ...(props.chars as QuizItem[]),
+    ...(getMasteredKanaPool().slice(0, 20)),
+  ]
+
+  const map = oppositeKanaMap.value
+  const cur = current.value
+  const canUseOppositeKana = !!map && !cur.isWord && !!map.get(cur.romaji)
+
+  if (canUseOppositeKana) {
+    // Kana-vs-kana mode: show the studied glyph, ask for the matching opposite-script glyph
+    const correct = map!.get(cur.romaji)!
+    const wrongs = [...new Set(
+      distractorPool
+        .filter(c => c.romaji !== cur.romaji && !c.isWord)
+        .map(c => map!.get(c.romaji))
+        .filter((x): x is string => !!x && x !== correct),
+    )]
+    options.value = shuffle([correct, ...shuffle(wrongs).slice(0, 3)])
+    correctAnswer.value = correct
+    optionsAreKana.value = true
+  } else {
+    // Fallback (words, mixed deck, or missing romaji match): keep Korean reading
+    const correct = cur.korean
+    const wrongs = [...new Set(
+      distractorPool
+        .filter(c => c.korean && c.korean !== correct)
+        .map(c => c.korean),
+    )]
+    options.value = shuffle([correct, ...shuffle(wrongs).slice(0, 3)])
+    correctAnswer.value = correct
+    optionsAreKana.value = false
+  }
 }
 
 /** Track all items seen in session so we can reconstruct retry items. */
@@ -313,7 +364,7 @@ function pick(answer: string) {
   totalAnswered.value++
 
   const cur = current.value!
-  const correct = answer === cur.korean
+  const correct = answer === correctAnswer.value
   const isRowChar = rowKanaSet.value.has(cur.kana)
 
   // Track item for retry reconstruction
@@ -463,18 +514,23 @@ onMounted(() => init())
         >
           🔊 발음 듣기
         </button>
-        <p class="text-sm text-fg-faint">{{ current.isWord ? '이 단어의 뜻은?' : '이 글자의 발음은?' }}</p>
+        <p class="text-sm text-fg-faint">
+          <template v-if="current.isWord">이 단어의 뜻은?</template>
+          <template v-else-if="optionsAreKana">같은 발음의 {{ oppositeScriptLabel }}는?</template>
+          <template v-else>이 글자의 발음은?</template>
+        </p>
       </div>
 
       <div class="grid grid-cols-2 gap-3 max-w-xs mx-auto">
         <button
           v-for="opt in options"
           :key="opt"
-          class="option-btn py-4 px-3 rounded-md border-2 text-center text-xl font-600 cursor-pointer"
+          class="option-btn py-4 px-3 rounded-md border-2 text-center font-600 cursor-pointer"
           :class="[
+            optionsAreKana ? 'kana-display text-3xl md:text-4xl' : 'text-xl',
             selected === null
               ? 'border-fg-faint/15 bg-card'
-              : opt === current.korean
+              : opt === correctAnswer
                 ? 'border-success bg-success-light text-success'
                 : opt === selected
                   ? 'border-error bg-error-light text-error'

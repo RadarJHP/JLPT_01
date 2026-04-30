@@ -15,6 +15,7 @@ const yoonRows = getKatakanaYoonRows()
 const selectedRow = ref<KanaRow | null>(null)
 const selectedRowIndex = ref<number>(-1)
 const tab = ref<'base' | 'dakuten' | 'yoon'>('base')
+const studyMode = ref<'quiz' | 'batch'>('quiz')
 
 const showRange = ref(false)
 const rangeStart = ref(0)
@@ -182,14 +183,42 @@ const nextRowLabel = computed(() => {
       <button class="text-sm text-fg-muted hover:text-fg mb-4 inline-flex items-center gap-1" @click="goBack">
         ← {{ selectedRow.name }}
       </button>
+
+      <!-- Mode toggle: 사지선다 ↔ 5문 입력 시험 -->
+      <div class="flex gap-1 p-1 bg-bg-inset rounded-lg mb-4 max-w-sm">
+        <button
+          class="flex-1 py-2 rounded-md text-xs font-600 transition-all"
+          :class="studyMode === 'quiz' ? 'bg-card text-fg-strong shadow-xs' : 'text-fg-muted'"
+          @click="studyMode = 'quiz'"
+        >
+          🎯 사지선다
+        </button>
+        <button
+          class="flex-1 py-2 rounded-md text-xs font-600 transition-all"
+          :class="studyMode === 'batch' ? 'bg-card text-fg-strong shadow-xs' : 'text-fg-muted'"
+          @click="studyMode = 'batch'"
+        >
+          ⌨️ 5문 입력
+        </button>
+      </div>
+
       <LearnQuiz
-        :key="selectedRow.nameJp"
+        v-if="studyMode === 'quiz'"
+        :key="selectedRow.nameJp + '-quiz'"
         :chars="selectedRow.chars"
         accent-color="cta"
         deck="katakana"
         :has-next="hasNextRow"
         :next-label="nextRowLabel"
         @next="goNextRow"
+      />
+      <BatchKanaTest
+        v-else
+        :key="selectedRow.nameJp + '-batch'"
+        :chars="selectedRow.chars"
+        accent-color="cta"
+        deck="katakana"
+        @back="goBack"
       />
     </div>
   </div>
